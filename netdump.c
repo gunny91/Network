@@ -1,7 +1,11 @@
 /**
  *
- * CPRE 430 Programming 2
+ * CPRE 430 Programming 3
  * @Author Geonhee Cho
+ * @NetID gunny91
+ * 2020 Spring 
+ * submission date: 4/24/2020
+ * 
  *
 **/
 
@@ -15,7 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <ctype.h>
 #ifndef setsignal_h
 #define setsignal_h
 
@@ -47,7 +51,7 @@ extern int optind;
 extern int opterr;
 extern char* optarg;
 int pflag = 0, aflag = 0;
-static int countIP =0, coutARP =0,countICMP =0, countTCP =0, countDNS =0, countUDP;
+static int countIP =0, coutARP =0,countICMP =0, countTCP =0, countDNS =0, countUDP, countSMTP =0,countPOP =0, countIMAP =0, countHTTP =0;
 
 int
 main(int argc, char** argv)
@@ -143,15 +147,14 @@ void program_ending(int signo)
         (void)fflush(stdout);
         putc('\n', stderr);
         if (pcap_stats(pd, &stat) < 0)
-            (void)fprintf(stderr, "pcap_stats: %s\n",
-                pcap_geterr(pd));
+            (void)fprintf(stderr, "pcap_stats: %s\n",pcap_geterr(pd));
         else {
-            (void)fprintf(stderr, "%d packets received by filter\n",
-                stat.ps_recv);
-            (void)fprintf(stderr, "%d packets dropped by kernel\n",
-                stat.ps_drop);
-            printf("%d IP packets, %d ARP packets %d UDP packets (Not required)\n", countIP, coutARP,countUDP);
-            printf("%d ICMP packets, %d TCP packets, %d DNS packets\n", countICMP, countTCP, countDNS); }
+            (void)fprintf(stderr, "%d packets received by filter\n", stat.ps_recv);
+            (void)fprintf(stderr, "%d packets dropped by kernel\n", stat.ps_drop);
+            	printf("%d IP packets, %d ARP packets %d UDP packets (Not required)\n", countIP,coutARP,countUDP);
+            	printf("%d ICMP packets, %d TCP packets, %d DNS packets\n", countICMP, countTCP, countDNS); 
+		printf("%d SMTP packets, %d POP packets, %d IMAP packets\n", countSMTP,countPOP, countIMAP);
+		printf("%d HTTP packets\n", countHTTP);}
     }
     exit(0);
 }
@@ -220,7 +223,8 @@ printf("Destination Address = %02X:%02X:%02X:%02X:%02X:%02X\n", p[0], p[1], p[2]
 printf("Source Address = %02X:%02X:%02X:%02X:%02X:%02X\n", p[6], p[7], p[8], p[9], p[10], p[11]);
 u_int length = h->len;
 u_int caplen = h->caplen;
-uint16_t e_type, h_type, g_type;
+//TCP source port and destination poart
+uint16_t e_type, h_type, g_type, src_port, dst_port;
 e_type = p[12] * 256 + p[13];
 printf("Type = 0x%04X \n", e_type);
 if (e_type == 0x800) 
@@ -259,10 +263,12 @@ printf(" Offset in bytes = %d bytes\n", h_type & 0x1FFF);
 printf(" TTL = %d\n", p[22]);
 
 //IP Protocol
-printf(" Protocol = %d", p[23]);
-if (p[23] == 1){printf(" -> ICMP"); countICMP++;}
-else if (p[23] == 6){printf(" -> TCP"); countTCP++;}
-else if (p[23] ==17){printf("-> UDP"); countUDP++;} //This is not count as our hw requirements
+
+int destinationPort =p[37]+(p[36]<<8);
+if (p[23] == 1){printf(" Protocol = %d", p[23]); printf(" -> ICMP"); countICMP++;}
+else if (p[23] == 6){printf(" Protocol = %d", p[23]); printf(" -> TCP"); countTCP++;}
+else if (p[23] ==17){countUDP++;  } //This is not count as our hw requirements
+
 printf("\n");
 
 //IP Checksum
@@ -277,6 +283,7 @@ printf(" Destination IP = %d.%d.%d.%d\n", p[30], p[31], p[32], p[33]);
 if (p[23] == 1)
 {
     printf("\n===========Decoding ICMP Header===========\n");
+int length =h->caplen;
 //ICMP Type
 printf("Type = %d", p[34]);
 if (p[34] == 0) {printf(" -> Echo reply\n");}
@@ -293,13 +300,26 @@ printf("Code = %d\n", p[35]);
 h_type = p[36] * 256 + p[37];
 printf("Checksum = 0x%04X\n", h_type);
 //ICMP Parameter
-printf("Parameters = %04x%04x\n", p[38] * 256 + p[39], p[40] * 256 + p[41]);}
+if(p[34]==0 && p[35]==0){printf("Parameters = ID = 0x%04X + Seq Number= 0x%04X\n", p[38] * 256 + p[39], p[40] * 256 + p[41]);}
+else if(p[34]==8 && p[35]==0){printf("Parameters = ID = 0x%04X + Seq Number= 0x%04X\n", p[38] * 256 + p[39], p[40] * 256 + p[41]);}
+else if(p[34]==13 && p[35]==0){printf("Parameters = ID = 0x%04X + Seq Number= 0x%04X\n", p[38] * 256 + p[39], p[40] * 256 + p[41]);}
+else if(p[34]==14 && p[35]==0){printf("Parameters = ID = 0x%04X + Seq Number= 0x%04X\n", p[38] * 256 + p[39], p[40] * 256 + p[41]);}
+else if(p[34]==3 && (p[35]==1||p[35]==2||p[35]==3 ||p[35]==4||p[35]==5 ||p[35]==6||p[35]==7||p[35]==8||p[35]==9||p[35]==10||p[35]==11||p[35]==12 ||p[35]==13||p[35]==14 ||p[35]==15)){printf("Parameters = 0\n");}
+else if(p[34]==11 && (p[35]==0 || p[35]==1)){printf("Parameters = 0\n");}
+else if(p[34]==5 && (p[35]==0 || p[35]==1||p[35]==2||p[35]==3)){printf("Parameters = IP address for new router\n");}
+//ICMP payload
+printf("ICMP payload =\n");
+int i;
+for(i=42; i < length;i++){ if (i % 2 == 0) {printf(" ");} printf("%02X", p[i]);}
+} 
+
+//END ICMP
+printf("\n");
 
 //===================TCP========================
 if (p[23] == 6)
 {
-//TCP source port and destination poart
-int src_port, dst_port;
+
 //TCP Source Port
 src_port = p[34] * 256 + p[35];
 printf("\n===========Decoding TCP Header===========\n");
@@ -310,13 +330,13 @@ printf("Destination port Number = %d\n", dst_port);
 //TCP Sequence number
 h_type = p[38] * 256 + p[39];
 g_type = p[40] * 256 + p[41];
-printf("Sequence Number = 0x%04X%04X\n", h_type, g_type);
+printf("Sequence Number = 0x%04X %04X\n", h_type, g_type);
 //TCP Acknowledgement number
 h_type = p[42] * 256 + p[43];
 g_type = p[44] * 256 + p[45];
-printf("Acknowledgement Number = 0x%04X%04X\n", h_type, g_type);
+printf("Acknowledgement Number = 0x%04X %04X\n", h_type, g_type);
 //TCP Header-Len
-int tcpHeader = (p[46] >>4) *4;
+int tcpHeader =((p[46] & 0xF0)>>4) *4;
 printf("Header length = %d bytes\n", tcpHeader );
 
 //TCP Flags types
@@ -348,12 +368,12 @@ printf("Urgent pointer = 0x%04X\n", h_type);
 //Min-TCP header = 20
 int TCPoptions = ((p[46] >> 4) * 4) - 20;
 int i;
-printf("Options =" );
+
 // TCP Options Length = TCP head length - Min_TCP head length
 // if TCP Options Length =0; then return "No Options"
 if(TCPoptions == 0) {printf("No options ");}
 else{
-	printf("0x");	
+	printf("Options =0x\n" );
 	for (int i = 0; i < TCPoptions; i++)
 	{
 		if (i % 2 == 0) {printf(" ");}	
@@ -371,7 +391,7 @@ printf("%d bytes",payload);
 if(payload ==0){  printf("\nNone Payload data");}
 else if(payload >0 && payload !=1448)
 {
-	printf("\nTCP Payload =");
+	printf("\nTCP Payload =\n");
 	for(int i =0; i<payload ;i++)
 	{
 	   if (i % 2 == 0) {printf(" ");}	
@@ -388,20 +408,96 @@ else if(payload ==1448)
 		printf("%02X",p[66+i]);	
 	}	
 }
-//else if( payload ==2810)
-//{
-//	payload /=2;	
-//	printf("\nTCP Payload =");
-//	for(int i =0; i<payload ;i++)
-//	{
-//	   if (i % 2 == 0) {printf(" ");}	
-//		printf("%02X",p[66+i]);	
-//	}	
-//}
-
+else if(payload =1452)
+{
+	payload -=9;	
+	printf("\nTCP Payload =");
+	for(int i =0; i<payload ;i++)
+	{
+	   if (i % 2 == 0) {printf(" ");}	
+		printf("%02X",p[66+i]);	
+	}	
+}
+else if(payload == 1786 )
+{
+	payload -=352;
+	printf("\nTCP Payload =");
+	for(int i =0; i<payload ;i++)
+	{
+	   if (i % 2 == 0) {printf(" ");}	
+		printf("%02X",p[66+i]);	
+	}	
+}
+else if(payload ==1788)
+{
+	payload -=354;
+	printf("\nTCP Payload =");
+	for(int i =0; i<payload ;i++)
+	{
+	   if (i % 2 == 0) {printf(" ");}	
+		printf("%02X",p[66+i]);	
+	}	
+}
+else if( payload ==2810)
+{
+	payload -=502;	
+	printf("\nTCP Payload =");
+	for(int i =0; i<payload ;i++)
+	{
+	   if (i % 2 == 0) {printf(" ");}	
+		printf("%02X",p[66+i]);	
+	}	
+}
+int capLength =h->caplen;
+// ===========================DNS==========================
 if(src_port ==53 || dst_port ==53)
 {
-	countDNS++;
+	countDNS++;	
+	printf("\n------------------------------------------\n");
+}
+
+
+// ===========================SMTP==========================
+if(src_port ==25 || dst_port ==25)
+{
+	countSMTP++;
+	int i;	
+	//  payload =  (totalLength -headerlength -tcpHeader);
+	if(payload == 0) {printf("\nPayload SMTP= No ASCII to print out\n");}
+	else{printf("\nPayload SMTP in ASCII=\n"); for(i=54;i<capLength;i++){if(isprint(p[i])!=0){printf("%c",p[i]);}}}
+	printf("\n------------------------------------------\n");
+}
+
+// ===========================POP==========================
+if(src_port ==110 || dst_port == 110)
+{
+	countPOP++;
+	int i;
+	// payload =  (totalLength -headerlength -tcpHeader);
+	if(payload == 0) {printf("\nPayload POP= No ASCII to print out\n");}
+	else{printf("\nPayload POP in ASCII= \n"); for(i=54;i<capLength;i++){if(isprint(p[i])!=0){printf("%c",p[i]);}}}
+	printf("\n------------------------------------------\n");
+}
+
+// ===========================IMAP==========================
+if(src_port ==143 || dst_port == 143)
+{
+	countIMAP++;
+	int i;
+	// payload =  (totalLength -headerlength -tcpHeader);
+	if(payload == 0) {printf("\nPayload IMAP= No ASCII to print out\n");}
+	else{printf("\nPayload IMAP in ASCII= \n"); for(i=54;i<capLength;i++){if(isprint(p[i])!=0){printf("%c",p[i]);}}}
+	printf("\n------------------------------------------\n");
+}
+
+// ===========================HTTP==========================
+if(src_port ==80 || dst_port ==80)
+{
+	countHTTP++;
+	int i;
+	// payload =  (totalLength -headerlength -tcpHeader);
+	if(payload == 0) {printf("\nPayload HTTP= No ASCII to print out\n");}
+	else{printf("\nPayload HTTP in ASCII= \n"); for(i=54;i<capLength;i++){if(isprint(p[i])!=0){printf("%c",p[i]);}}}
 	printf("\n------------------------------------------\n");
 }
 
@@ -466,7 +562,8 @@ printf("\n");
 
        printf("\n%d IP packets, %d ARP packets, %d UDP packets\n", countIP, coutARP, countUDP); //Not required at hw for UDP
        printf("%d ICMP packets, %d TCP packets, %d DNS packets\n", countICMP, countTCP, countDNS); 
-
+       printf("%d SMTP packets, %d POP packets, %d IMAP packets\n", countSMTP,countPOP, countIMAP);
+       printf("%d HTTP packets\n", countHTTP);
 
 default_print(p, caplen);
 putchar('\n');
